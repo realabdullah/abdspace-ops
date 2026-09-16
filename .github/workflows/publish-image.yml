@@ -43,5 +43,41 @@ jobs:
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
 
+            - name: Update Dokploy image
+              env:
+                  DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+                  DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+                  DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+                  OPS_IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+              run: |
+                  CURRENT=$(curl --fail-with-body \
+                    "${DOKPLOY_URL}/api/compose.one?composeId=${DOKPLOY_COMPOSE_ID}" \
+                    -H "x-api-key: ${DOKPLOY_API_KEY}")
+
+                  CURRENT_ENV=$(echo "$CURRENT" | jq -r '.env // ""')
+
+                  UPDATED_ENV=$(printf '%s\n' "$CURRENT_ENV" | awk -v image="$OPS_IMAGE" '
+                    BEGIN { found = 0 }
+                    /^OPS_IMAGE=/ {
+                      print "OPS_IMAGE=" image
+                      found = 1
+                      next
+                    }
+                    { print }
+                    END {
+                      if (!found) print "OPS_IMAGE=" image
+                    }
+                  ')
+
+                  jq -n \
+                    --arg composeId "$DOKPLOY_COMPOSE_ID" \
+                    --arg env "$UPDATED_ENV" \
+                    '{composeId: $composeId, env: $env}' \
+                    | curl --fail-with-body \
+                        -X POST "${DOKPLOY_URL}/api/compose.saveEnvironment" \
+                        -H "Content-Type: application/json" \
+                        -H "x-api-key: ${DOKPLOY_API_KEY}" \
+                        --data-binary @-
+
             - name: Deploy to Dokploy
               run: curl --fail-with-body --request POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
