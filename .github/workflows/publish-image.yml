@@ -1,4 +1,4 @@
-name: Publish container image
+name: Publish and deploy
 
 on:
     push:
@@ -13,6 +13,7 @@ permissions:
 jobs:
     publish:
         runs-on: ubuntu-latest
+
         steps:
             - name: Check out repository
               uses: actions/checkout@v4
@@ -41,3 +42,6 @@ jobs:
                       ${{ env.IMAGE_NAME }}:${{ github.sha }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
+
+            - name: Deploy to Dokploy
+              run: curl --fail-with-body --request POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
