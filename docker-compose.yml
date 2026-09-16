@@ -1,0 +1,66 @@
+services:
+    dashboard:
+        image: ${OPS_IMAGE}
+        restart: unless-stopped
+        environment:
+            DOCKER_API_URL: http://docker-socket-proxy:2375
+            DASHBOARD_DOCKER_MODE: ${DASHBOARD_DOCKER_MODE:-swarm}
+            DASHBOARD_DISK_PATH: /host-disk
+            TZ: ${TZ:-UTC}
+            DASHBOARD_SERVICES: ${DASHBOARD_SERVICES}
+            DASHBOARD_DEPLOYMENTS: ${DASHBOARD_DEPLOYMENTS}
+            DASHBOARD_LINKS: ${DASHBOARD_LINKS}
+            BACKUP_LOG_PATH: /backups/backup.log
+            BACKUP_LOG_SUCCESS_PATTERN: ${BACKUP_LOG_SUCCESS_PATTERN:-completed|success}
+            BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+            UPTIME_KUMA_URL: ${UPTIME_KUMA_URL:-}
+            UPTIME_KUMA_STATUS_SLUG: ${UPTIME_KUMA_STATUS_SLUG:-}
+            CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+            CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
+            DASHBOARD_REQUIRE_CF_ACCESS: ${DASHBOARD_REQUIRE_CF_ACCESS:-false}
+        volumes:
+            - /srv/ops-disk-probe:/host-disk:ro
+            - ${BACKUP_LOG_HOST_PATH}:/backups/backup.log:ro
+        expose:
+            - "3000"
+        networks:
+            - ops
+            - dokploy-network
+        depends_on:
+            - docker-socket-proxy
+
+    docker-socket-proxy:
+        image: tecnativa/docker-socket-proxy:0.3.0
+        restart: unless-stopped
+        environment:
+            CONTAINERS: 1
+            SERVICES: 1
+            TASKS: 1
+            POST: 0
+            IMAGES: 0
+            NETWORKS: 0
+            VOLUMES: 0
+            NODES: 0
+            SECRETS: 0
+            CONFIGS: 0
+            SWARM: 0
+            SYSTEM: 0
+            INFO: 0
+            VERSION: 1
+            EXEC: 0
+            PLUGINS: 0
+            BUILD: 0
+            COMMIT: 0
+            DISTRIBUTION: 0
+            SESSION: 0
+            AUTH: 0
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+        networks:
+            - ops
+
+networks:
+    ops:
+        driver: bridge
+    dokploy-network:
+        external: true
