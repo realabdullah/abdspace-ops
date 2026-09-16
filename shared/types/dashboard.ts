@@ -29,23 +29,46 @@ export interface ServerStats {
 }
 
 export interface ServiceStatus {
+	id: string | null;
 	name: string;
 	state: HealthState;
 	detail: string;
-	source: "docker" | "uptime-kuma";
+	source: "docker";
 	replicas: { running: number; desired: number } | null;
+	image: string | null;
+	taskState: string | null;
+	taskId: string | null;
+	lastRestartAt: string | null;
+	createdAt: string | null;
+	updatedAt: string | null;
+	failureReason: string | null;
+}
+
+export interface ExternalCheck {
+	id: string;
+	name: string;
+	state: HealthState;
+	detail: string;
+	source: "uptime-kuma" | "dashboard";
+	checkedAt: string | null;
 }
 
 export interface Deployment {
 	name: string;
 	image: string | null;
-	imageId: string | null;
-	createdAt: string | null;
+	digest: string | null;
+	immutableTag: string | null;
+	deployedAt: string | null;
+	commitSha: string | null;
 }
 
 export interface BackupStatus {
 	latestAt: string | null;
 	ageSeconds: number | null;
+	filename: string | null;
+	sizeBytes: number | null;
+	retentionDays: number;
+	lastFailure: { at: string | null; detail: string; filename: string | null } | null;
 	state: HealthState;
 	detail: string;
 }
@@ -58,7 +81,8 @@ export interface Shortcut {
 export interface DashboardPayload {
 	generatedAt: string;
 	server: Section<ServerStats>;
-	services: Section<ServiceStatus[]>;
+	swarmServices: Section<ServiceStatus[]>;
+	externalHealth: Section<ExternalCheck[]>;
 	deployments: Section<Deployment[]>;
 	backup: Section<BackupStatus>;
 	shortcuts: Shortcut[];

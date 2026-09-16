@@ -56,8 +56,36 @@ function healthOf(container: DockerContainer): { state: HealthState; detail: str
 export function toServices(containers: DockerContainer[], targets: NamedTarget[]): ServiceStatus[] {
 	return targets.map((target) => {
 		const container = findContainer(containers, target.match);
-		if (!container) return { name: target.label, state: "unknown", detail: "no container matched", source: "docker", replicas: null };
-		return { name: target.label, ...healthOf(container), source: "docker", replicas: null };
+		if (!container)
+			return {
+				id: null,
+				name: target.label,
+				state: "unknown",
+				detail: "configured container was not found",
+				source: "docker",
+				replicas: null,
+				image: null,
+				taskState: null,
+				taskId: null,
+				lastRestartAt: null,
+				createdAt: null,
+				updatedAt: null,
+				failureReason: null,
+			};
+		return {
+			id: container.Id,
+			name: target.label,
+			...healthOf(container),
+			source: "docker",
+			replicas: null,
+			image: container.Image,
+			taskState: container.State,
+			taskId: container.Id,
+			lastRestartAt: null,
+			createdAt: container.Created ? new Date(container.Created * 1000).toISOString() : null,
+			updatedAt: null,
+			failureReason: container.State === "running" ? null : container.Status,
+		};
 	});
 }
 
@@ -67,8 +95,10 @@ export function toDeployments(containers: DockerContainer[], targets: NamedTarge
 		return {
 			name: target.label,
 			image: container?.Image ?? null,
-			imageId: container?.ImageID ? container.ImageID.slice(0, 19) : null,
-			createdAt: container?.Created ? new Date(container.Created * 1000).toISOString() : null,
+			digest: container?.ImageID ?? null,
+			immutableTag: null,
+			deployedAt: container?.Created ? new Date(container.Created * 1000).toISOString() : null,
+			commitSha: container?.Labels?.["org.opencontainers.image.revision"] ?? null,
 		};
 	});
 }

@@ -50,6 +50,7 @@ export function dashboardConfig() {
 			markerPath: env.BACKUP_MARKER_PATH || "",
 			successPattern: env.BACKUP_LOG_SUCCESS_PATTERN || "completed|success",
 			maxAgeHours: Number(env.BACKUP_MAX_AGE_HOURS || 26),
+			retentionDays: Number(env.BACKUP_RETENTION_DAYS || 14),
 		},
 		shortcuts: parseLinks(env.DASHBOARD_LINKS),
 		cfAccess: {

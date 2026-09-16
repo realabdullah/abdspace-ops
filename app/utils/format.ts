@@ -30,6 +30,20 @@ export function formatUptime(seconds: number): string {
 	return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 }
 
+export function formatAge(seconds: number): string {
+	if (seconds < 60) return "just now";
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m ago`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 48) return `${hours}h ago`;
+	return `${Math.floor(hours / 24)}d ago`;
+}
+
+export function shortId(value: string): string {
+	const normalized = value.replace(/^sha256:/, "");
+	return normalized.length > 12 ? normalized.slice(0, 12) : normalized;
+}
+
 const TIME = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 const DATE_TIME = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 

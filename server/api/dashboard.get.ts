@@ -1,4 +1,4 @@
-import type { DashboardPayload, Section, ServiceStatus } from "#shared/types/dashboard";
+import type { DashboardPayload, ExternalCheck, Section } from "#shared/types/dashboard";
 
 export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 	const config = dashboardConfig();
@@ -6,12 +6,18 @@ export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 	const docker = readDockerSnapshot(config.docker);
 	docker.catch(() => {});
 
-	const [server, services, deployments, backup] = await Promise.all([
+	const [server, swarmServices, externalHealth, deployments, backup] = await Promise.all([
 		section(() => readServerStats(config.diskPath)),
-		section(async (): Promise<ServiceStatus[]> => {
-			const fromDocker = (await docker).services;
-			const fromKuma = await readKumaServices(config.kuma.baseUrl, config.kuma.statusSlug).catch(() => []);
-			return mergeServices(fromDocker, fromKuma);
+		section(async () => (await docker).services),
+		section(async (): Promise<ExternalCheck[]> => {
+			const self = dashboardSelfCheck();
+			if (!config.kuma.baseUrl || !config.kuma.statusSlug) return [self];
+			try {
+				return [self, ...(await readKumaChecks(config.kuma.baseUrl, config.kuma.statusSlug))];
+			} catch (error) {
+				console.error("[dashboard] Uptime Kuma check failed", error);
+				return [self, { id: "kuma-unavailable", name: "Uptime Kuma", state: "unknown", detail: "status page unavailable", source: "uptime-kuma", checkedAt: null }];
+			}
 		}),
 		section(async () => (await docker).deployments),
 		section(() => readBackupStatus(config.backup)),
@@ -22,12 +28,24 @@ export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 	return {
 		generatedAt: new Date().toISOString(),
 		server,
-		services,
+		swarmServices,
+		externalHealth,
 		deployments,
 		backup,
 		shortcuts: config.shortcuts,
 	};
 });
+
+function dashboardSelfCheck(): ExternalCheck {
+	return {
+		id: "dashboard-self",
+		name: "Ops Dashboard",
+		state: "online",
+		detail: "dashboard API is responding",
+		source: "dashboard",
+		checkedAt: new Date().toISOString(),
+	};
+}
 
 async function section<T>(read: () => Promise<T>): Promise<Section<T>> {
 	try {

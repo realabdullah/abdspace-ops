@@ -17,7 +17,7 @@ async function tail(path: string): Promise<string> {
 	}
 }
 
-function timestampIn(line: string): Date | null {
+export function timestampIn(line: string): Date | null {
 	const iso = line.match(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/);
 	if (iso) {
 		const parsed = new Date(iso[0].replace(" ", "T"));
@@ -45,35 +45,79 @@ function localDate(match: RegExpMatchArray): Date | null {
 	return Number.isNaN(parsed.getTime()) || parsed.getMonth() !== mo! - 1 ? null : parsed;
 }
 
-async function latestFromLog(path: string, successPattern: string): Promise<Date | null> {
+interface BackupLogEntry {
+	at: Date | null;
+	filename: string | null;
+	sizeBytes: number | null;
+	detail: string;
+}
+
+interface ParsedBackupLog {
+	latestSuccess: BackupLogEntry | null;
+	lastFailure: BackupLogEntry | null;
+}
+
+export function parseBackupLog(content: string, successPattern: string): ParsedBackupLog {
 	const success = new RegExp(successPattern, "i");
-	const lines = (await tail(path)).split("\n");
+	const failure = /failed|failure|error/i;
+	const lines = content.split("\n");
+	let latestSuccess: BackupLogEntry | null = null;
+	let lastFailure: BackupLogEntry | null = null;
 
 	for (let index = lines.length - 1; index >= 0; index -= 1) {
 		const line = lines[index]!;
-		if (!success.test(line)) continue;
-		const at = timestampIn(line);
-		if (at) return at;
+		if (!latestSuccess && success.test(line)) latestSuccess = entryFrom(line);
+		if (!lastFailure && failure.test(line)) lastFailure = entryFrom(line);
+		if (latestSuccess && lastFailure) break;
 	}
-	return null;
+	return { latestSuccess, lastFailure };
+}
+
+function entryFrom(line: string): BackupLogEntry {
+	return {
+		at: timestampIn(line),
+		filename: line.match(/\btaskgid-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.dump\b/i)?.[0] ?? null,
+		sizeBytes: sizeIn(line),
+		detail: line.trim().slice(0, 240),
+	};
+}
+
+function sizeIn(line: string): number | null {
+	const match = line.match(/(?:size[=:]?\s*|\()(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|KiB|MiB|GiB)\b/i);
+	if (!match) return null;
+	const powers: Record<string, number> = { b: 0, kb: 1, kib: 1, mb: 2, mib: 2, gb: 3, gib: 3 };
+	return Math.round(Number(match[1]) * 1024 ** powers[match[2]!.toLowerCase()]!);
 }
 
 export async function readBackupStatus(config: DashboardConfig["backup"]): Promise<BackupStatus> {
 	if (!config.logPath && !config.markerPath) {
-		return { latestAt: null, ageSeconds: null, state: "unknown", detail: "no backup log configured" };
+		return { latestAt: null, ageSeconds: null, filename: null, sizeBytes: null, retentionDays: config.retentionDays, lastFailure: null, state: "unknown", detail: "no backup log configured" };
 	}
 
 	let latest: Date | null = null;
+	let filename: string | null = null;
+	let sizeBytes: number | null = null;
+	let lastFailure: BackupStatus["lastFailure"] = null;
 
 	if (config.logPath) {
-		latest = await latestFromLog(config.logPath, config.successPattern);
+		const parsed = parseBackupLog(await tail(config.logPath), config.successPattern);
+		latest = parsed.latestSuccess?.at ?? null;
+		filename = parsed.latestSuccess?.filename ?? null;
+		sizeBytes = parsed.latestSuccess?.sizeBytes ?? null;
+		if (parsed.lastFailure) {
+			lastFailure = {
+				at: parsed.lastFailure.at?.toISOString() ?? null,
+				detail: parsed.lastFailure.detail,
+				filename: parsed.lastFailure.filename,
+			};
+		}
 	}
 	if (!latest && config.markerPath) {
 		latest = (await stat(config.markerPath)).mtime;
 	}
 
 	if (!latest) {
-		return { latestAt: null, ageSeconds: null, state: "offline", detail: "no successful backup found in log" };
+		return { latestAt: null, ageSeconds: null, filename, sizeBytes, retentionDays: config.retentionDays, lastFailure, state: "offline", detail: "no successful backup found in log" };
 	}
 
 	const ageSeconds = Math.max(0, Math.floor((Date.now() - latest.getTime()) / 1000));
@@ -81,5 +125,5 @@ export async function readBackupStatus(config: DashboardConfig["backup"]): Promi
 	const state = ageSeconds <= maxAgeSeconds ? "online" : ageSeconds <= maxAgeSeconds * 2 ? "degraded" : "offline";
 	const detail = state === "online" ? "within schedule" : `older than ${config.maxAgeHours}h`;
 
-	return { latestAt: latest.toISOString(), ageSeconds, state, detail };
+	return { latestAt: latest.toISOString(), ageSeconds, filename, sizeBytes, retentionDays: config.retentionDays, lastFailure, state, detail };
 }

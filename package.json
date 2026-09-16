@@ -11,6 +11,7 @@
 		"dev": "nuxt dev",
 		"preview": "nuxt preview",
 		"postinstall": "nuxt prepare",
+		"test": "TZ=UTC node --test server/utils/*.test.ts",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
