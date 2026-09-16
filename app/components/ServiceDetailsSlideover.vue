@@ -7,32 +7,42 @@ const open = computed({ get: () => props.service !== null, set: (value) => !valu
 </script>
 
 <template>
-	<USlideover v-model:open="open" :title="service?.name" description="Current Docker Swarm service and task details">
-		<template #body
-			><div v-if="service" class="space-y-5">
-				<div class="flex items-center justify-between"><span class="text-muted text-sm">Status</span><StatusDot :state="service.state" /></div>
-				<div class="divide-default divide-y">
-					<StatRow label="Replicas" :value="service.replicas ? `${service.replicas.running} running / ${service.replicas.desired} desired` : 'Unavailable'" /><StatRow
-						label="Task state"
-						:value="service.taskState || 'Unavailable'"
-					/><StatRow label="Last restart" :value="service.lastRestartAt ? formatMoment(service.lastRestartAt) : 'No restart observed'" /><StatRow
-						label="Created"
-						:value="service.createdAt ? formatMoment(service.createdAt) : 'Unavailable'"
-					/><StatRow label="Updated" :value="service.updatedAt ? formatMoment(service.updatedAt) : 'Unavailable'" />
+	<USlideover v-model:open="open" :title="service?.name" description="Swarm service and current task">
+		<template #body>
+			<div v-if="service" class="space-y-6">
+				<div class="border-line flex items-center justify-between gap-3 border-b pb-4">
+					<StatePip :state="service.state" :label="true" :size="10" />
+					<span class="readout text-ink-3 text-xs">{{ service.detail }}</span>
 				</div>
-				<div>
-					<p class="text-muted mb-1 text-xs font-medium tracking-wide uppercase">Image</p>
-					<p class="text-highlighted font-mono text-xs break-all">{{ service.image || "Unavailable" }}</p>
+
+				<dl class="divide-line divide-y">
+					<StatRow label="Replicas" :value="service.replicas ? `${service.replicas.running} running of ${service.replicas.desired} desired` : 'unavailable'" />
+					<StatRow label="Task state" :value="service.taskState || 'unavailable'" />
+					<StatRow label="Last restart" :value="service.lastRestartAt ? formatMoment(service.lastRestartAt) : 'no restart observed'" />
+					<StatRow label="Created" :value="service.createdAt ? formatMoment(service.createdAt) : 'unavailable'" />
+					<StatRow label="Updated" :value="service.updatedAt ? formatMoment(service.updatedAt) : 'unavailable'" />
+				</dl>
+
+				<CopyField v-if="service.image" label="Image" :value="service.image">
+					<span class="text-ink-3">{{ splitImageRef(service.image).repository }}:</span><span class="text-ink">{{ splitImageRef(service.image).tag }}</span>
+					<span v-if="splitImageRef(service.image).digest" class="text-ink-3 block">@{{ shortId(splitImageRef(service.image).digest!) }}</span>
+				</CopyField>
+				<div v-else>
+					<p class="label">Image</p>
+					<p class="readout text-ink-3 mt-2 text-xs">unavailable</p>
 				</div>
-				<div>
-					<p class="text-muted mb-1 text-xs font-medium tracking-wide uppercase">Task / container ID</p>
-					<p class="text-highlighted font-mono text-xs break-all">{{ service.taskId || "Unavailable" }}</p>
+
+				<CopyField v-if="service.taskId" label="Task / container" :value="service.taskId" />
+				<div v-else>
+					<p class="label">Task / container</p>
+					<p class="readout text-ink-3 mt-2 text-xs">unavailable</p>
 				</div>
-				<div v-if="service.failureReason" class="border-error/30 bg-error/5 rounded-md border p-3">
-					<p class="text-error text-xs font-medium tracking-wide uppercase">Recent failure</p>
-					<p class="text-muted mt-1 text-sm wrap-break-word">{{ service.failureReason }}</p>
+
+				<div v-if="service.failureReason" class="border-crit/40 bg-crit/[0.06] border p-3">
+					<p class="label text-crit">Recent failure</p>
+					<p class="text-ink-2 mt-2 text-sm wrap-break-word">{{ service.failureReason }}</p>
 				</div>
-			</div></template
-		>
+			</div>
+		</template>
 	</USlideover>
 </template>

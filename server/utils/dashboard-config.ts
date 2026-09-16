@@ -33,6 +33,7 @@ function accessIssuer(raw: string | undefined): string {
 
 export function dashboardConfig() {
 	const env = process.env;
+	const cpuWarningPercent = percent(env.CPU_WARNING_PERCENT, 75);
 	const ramWarningPercent = percent(env.RAM_WARNING_PERCENT, 80);
 	const diskWarningPercent = percent(env.DISK_WARNING_PERCENT, 75);
 	return {
@@ -55,6 +56,8 @@ export function dashboardConfig() {
 			retentionDays: positiveNumber(env.BACKUP_RETENTION_DAYS, 14),
 		},
 		thresholds: {
+			cpuWarningPercent,
+			cpuCriticalPercent: Math.max(cpuWarningPercent, percent(env.CPU_CRITICAL_PERCENT, 90)),
 			ramWarningPercent,
 			ramCriticalPercent: Math.max(ramWarningPercent, percent(env.RAM_CRITICAL_PERCENT, 90)),
 			diskWarningPercent,

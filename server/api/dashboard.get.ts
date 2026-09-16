@@ -44,6 +44,7 @@ export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 		activity,
 		attention,
 		shortcuts: config.shortcuts,
+		thresholds: config.thresholds,
 	};
 });
 

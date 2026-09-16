@@ -118,7 +118,17 @@ function sizeIn(line: string): number | null {
 
 export async function readBackupStatus(config: DashboardConfig["backup"]): Promise<BackupStatus> {
 	if (!config.logPath && !config.markerPath) {
-		return { latestAt: null, ageSeconds: null, filename: null, sizeBytes: null, retentionDays: config.retentionDays, lastFailure: null, state: "unknown", detail: "no backup log configured" };
+		return {
+			latestAt: null,
+			ageSeconds: null,
+			filename: null,
+			sizeBytes: null,
+			retentionDays: config.retentionDays,
+			maxAgeHours: config.maxAgeHours,
+			lastFailure: null,
+			state: "unknown",
+			detail: "no backup log configured",
+		};
 	}
 
 	let latest: Date | null = null;
@@ -144,7 +154,17 @@ export async function readBackupStatus(config: DashboardConfig["backup"]): Promi
 	}
 
 	if (!latest) {
-		return { latestAt: null, ageSeconds: null, filename, sizeBytes, retentionDays: config.retentionDays, lastFailure, state: "offline", detail: "no successful backup found in log" };
+		return {
+			latestAt: null,
+			ageSeconds: null,
+			filename,
+			sizeBytes,
+			retentionDays: config.retentionDays,
+			maxAgeHours: config.maxAgeHours,
+			lastFailure,
+			state: "offline",
+			detail: "no successful backup found in log",
+		};
 	}
 
 	const ageSeconds = Math.max(0, Math.floor((Date.now() - latest.getTime()) / 1000));
@@ -152,5 +172,5 @@ export async function readBackupStatus(config: DashboardConfig["backup"]): Promi
 	const state = ageSeconds <= maxAgeSeconds ? "online" : ageSeconds <= maxAgeSeconds * 2 ? "degraded" : "offline";
 	const detail = state === "online" ? "within schedule" : `older than ${config.maxAgeHours}h`;
 
-	return { latestAt: latest.toISOString(), ageSeconds, filename, sizeBytes, retentionDays: config.retentionDays, lastFailure, state, detail };
+	return { latestAt: latest.toISOString(), ageSeconds, filename, sizeBytes, retentionDays: config.retentionDays, maxAgeHours: config.maxAgeHours, lastFailure, state, detail };
 }

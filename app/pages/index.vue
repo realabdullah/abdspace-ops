@@ -1,209 +1,174 @@
 <script setup lang="ts">
-import type { DashboardPayload, HealthState, ServiceStatus } from "#shared/types/dashboard";
+import type { ServiceStatus } from "#shared/types/dashboard";
+import type { LedgerCell } from "~/components/LedgerStrip.vue";
 
-const { data, status, error, refresh } = await useFetch<DashboardPayload>("/api/dashboard", { lazy: true, server: false, cache: "no-store" });
-const selectedService = ref<ServiceStatus | null>(null);
-const pending = computed(() => status.value === "pending");
-const refreshedAt = computed(() => (data.value ? formatClock(data.value.generatedAt) : null));
-const onlineCount = (items: Array<{ state: HealthState }>) => items.filter((item) => item.state === "online").length;
+const { data, error, pending, refresh, history, live, verdict, staleSeconds } = useOpsDashboard();
+useStatusSignal(
+	verdict,
+	computed(() => Boolean(error.value))
+);
 
-const healthSummary = computed(() => {
-	if (!data.value) return null;
-	const { server, swarmServices, externalHealth, backup } = data.value;
-	if (data.value.attention.some(({ severity }) => severity === "critical")) return { label: "Systems need attention", state: "offline" as HealthState };
-	if (data.value.attention.length) return { label: "Some systems need attention", state: "degraded" as HealthState };
-	const sections = [server, swarmServices, externalHealth, backup];
-	if (sections.some((section) => !section.ok)) return { label: "Some status unavailable", state: "unknown" as HealthState };
-	if (!swarmServices.ok || !externalHealth.ok || !backup.ok) return { label: "Some status unavailable", state: "unknown" as HealthState };
-	const states = [...swarmServices.data.map(({ state }) => state), ...externalHealth.data.map(({ state }) => state), backup.data.state];
-	if (states.includes("offline")) return { label: "Systems need attention", state: "offline" as HealthState };
-	if (states.includes("degraded")) return { label: "Some systems degraded", state: "degraded" as HealthState };
-	if (states.includes("unknown")) return { label: "Some status unknown", state: "unknown" as HealthState };
-	return { label: "All systems healthy", state: "online" as HealthState };
+const inspected = ref<ServiceStatus | null>(null);
+const inspectByName = (name: string) => {
+	const service = data.value?.swarmServices.ok ? data.value.swarmServices.data.find((item) => item.name === name) : null;
+	if (service) inspected.value = service;
+};
+
+const ledger = computed<LedgerCell[]>(() => {
+	const payload = data.value;
+	if (!payload) return [];
+	const services = payload.swarmServices;
+	const checks = payload.externalHealth;
+	const backup = payload.backup;
+	const deployedAt = payload.deployments.ok
+		? payload.deployments.data
+				.map((deployment) => deployment.deployedAt)
+				.filter((at): at is string => Boolean(at) && !Number.isNaN(Date.parse(at!)))
+				.sort((a, b) => Date.parse(b) - Date.parse(a))
+				.at(0)
+		: null;
+	const running = services.ok ? services.data.filter((service) => service.state === "online").length : 0;
+	const passing = checks.ok ? checks.data.filter((check) => check.state === "online").length : 0;
+
+	return [
+		{
+			label: "Services",
+			value: services.ok ? `${running}/${services.data.length}` : "—",
+			sub: services.ok ? "running" : "swarm unavailable",
+			tone: services.ok ? (running === services.data.length ? "ok" : "crit") : "idle",
+		},
+		{
+			label: "Checks",
+			value: checks.ok ? `${passing}/${checks.data.length}` : "—",
+			sub: checks.ok ? "passing" : "checks unavailable",
+			tone: checks.ok ? (passing === checks.data.length ? "ok" : "crit") : "idle",
+		},
+		{
+			label: "Backup",
+			value: backup.ok && backup.data.ageSeconds !== null ? formatDurationShort(backup.data.ageSeconds) : "—",
+			sub: backup.ok ? backup.data.detail : "log unavailable",
+			tone: backup.ok ? TONE[backup.data.state] : "idle",
+		},
+		{
+			label: "Last deploy",
+			value: deployedAt ? formatDurationShort(Math.max(0, (Date.now() - Date.parse(deployedAt)) / 1000)) : "—",
+			sub: deployedAt ? "ago" : "no deploy recorded",
+		},
+	];
 });
-
-useHead({ title: "Server" });
 </script>
 
 <template>
-	<UContainer class="max-w-5xl py-8">
-		<header class="mb-6 flex flex-wrap items-center justify-between gap-3">
-			<div>
-				<h1 class="text-highlighted text-lg font-semibold">Server</h1>
-				<p class="text-muted text-sm">
-					<template v-if="refreshedAt">Last refreshed at {{ refreshedAt }}</template
-					><template v-else-if="pending">Loading…</template><template v-else>Not loaded</template>
-				</p>
-			</div>
-			<UButton icon="i-lucide-refresh-cw" label="Refresh" color="neutral" variant="subtle" size="sm" :loading="pending" @click="refresh()" />
-		</header>
-
-		<UAlert
-			v-if="error"
-			class="mb-6"
-			color="error"
-			variant="subtle"
-			icon="i-lucide-circle-alert"
-			title="Could not load the dashboard"
-			:description="error.status === 403 ? 'This request did not come through Cloudflare Access.' : 'The dashboard API did not respond. Try refreshing.'"
+	<div class="min-h-svh pb-16">
+		<ChromeBar
+			:hostname="data?.server.ok ? data.server.data.hostname : null"
+			:generated-at="data?.generatedAt ?? null"
+			:stale-seconds="staleSeconds"
+			:pending="pending"
+			:live="live"
+			@refresh="refresh()"
+			@update:live="live = $event"
 		/>
 
-		<section v-if="data && healthSummary" class="border-default bg-default mb-4 rounded-lg border p-4">
-			<StatusDot :state="healthSummary.state" :label="healthSummary.label" />
-			<div class="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-5">
-				<p class="text-muted text-sm">
-					<span class="text-highlighted font-semibold tabular-nums">{{ data.swarmServices.ok ? `${onlineCount(data.swarmServices.data)}/${data.swarmServices.data.length}` : "—" }}</span>
-					services online
-				</p>
-				<p class="text-muted text-sm">
-					<span class="text-highlighted font-semibold tabular-nums">{{ data.externalHealth.ok ? `${onlineCount(data.externalHealth.data)}/${data.externalHealth.data.length}` : "—" }}</span>
-					external checks healthy
-				</p>
-				<p class="text-muted text-sm">
-					Latest backup
-					<span class="text-highlighted font-semibold">{{ data.backup.ok && data.backup.data.ageSeconds !== null ? formatAge(data.backup.data.ageSeconds) : "unavailable" }}</span>
-				</p>
-				<p class="text-muted text-sm">
-					RAM <span class="text-highlighted font-semibold tabular-nums">{{ data.server.ok ? `${data.server.data.memory.usagePercent}%` : "—" }}</span>
-				</p>
-				<p class="text-muted text-sm">
-					Disk <span class="text-highlighted font-semibold tabular-nums">{{ data.server.ok ? `${data.server.data.disk.usagePercent}%` : "—" }}</span>
-				</p>
-			</div>
-		</section>
-
-		<section v-if="data?.attention.length" class="border-warning/40 bg-warning/5 mb-4 rounded-lg border p-4">
-			<div class="mb-3 flex items-center gap-2">
-				<UIcon name="i-lucide-triangle-alert" class="text-warning size-4" />
-				<h2 class="text-highlighted text-sm font-semibold">Attention</h2>
-			</div>
-			<div class="divide-default divide-y">
-				<div v-for="item in data.attention" :key="item.id" class="flex gap-3 py-2 first:pt-0 last:pb-0">
-					<span class="mt-1 size-2 shrink-0 rounded-full" :class="item.severity === 'critical' ? 'bg-error' : 'bg-warning'" />
+		<section v-if="error" class="border-crit/40 bg-crit/[0.09] border-b">
+			<div class="mx-auto flex max-w-[88rem] flex-col gap-5 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:gap-10 sm:px-6 sm:py-8">
+				<div class="flex items-start gap-4 sm:items-center sm:gap-5">
+					<span class="text-crit relative mt-1.5 flex size-8 shrink-0 items-center justify-center sm:mt-0">
+						<span class="beacon absolute inset-2 rounded-full" />
+						<svg viewBox="0 0 28 28" class="relative size-8" aria-hidden="true"><rect x="4.2" y="4.2" width="19.6" height="19.6" fill="currentColor" /></svg>
+					</span>
 					<div class="min-w-0">
-						<p class="text-highlighted text-sm font-medium">{{ item.title }}</p>
-						<p class="text-muted text-xs">{{ item.detail }}</p>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<div class="grid gap-4 md:grid-cols-2">
-			<DashboardCard title="Server" :section="data?.server" :loading="pending"
-				><div v-if="data?.server.ok" class="divide-default divide-y">
-					<StatRow label="CPU" :value="`${data.server.data.cpu.usagePercent}%`" :hint="`load ${data.server.data.cpu.load[0]}`" /><StatRow
-						label="RAM"
-						:value="formatBytesPair(data.server.data.memory.usedBytes, data.server.data.memory.totalBytes)"
-						:hint="`${data.server.data.memory.usagePercent}%`"
-					/><StatRow label="Disk" :value="formatBytesPair(data.server.data.disk.usedBytes, data.server.data.disk.totalBytes)" :hint="`${data.server.data.disk.usagePercent}%`" /><StatRow
-						label="Uptime"
-						:value="formatUptime(data.server.data.uptimeSeconds)"
-					/></div
-			></DashboardCard>
-
-			<DashboardCard title="Swarm Services" :section="data?.swarmServices" :loading="pending">
-				<div v-if="data?.swarmServices.ok" class="divide-default divide-y">
-					<p v-if="!data.swarmServices.data.length" class="text-muted py-1 text-sm">No services configured.</p>
-					<button
-						v-for="service in data.swarmServices.data"
-						:key="service.name"
-						type="button"
-						class="hover:bg-elevated focus-visible:ring-primary -mx-2 flex w-[calc(100%+1rem)] items-center justify-between gap-4 rounded-md px-2 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
-						@click="selectedService = service"
-					>
-						<span class="text-highlighted min-w-0 truncate text-sm">{{ service.name }}</span
-						><span class="flex shrink-0 items-center gap-3"
-							><span class="text-dimmed font-mono text-xs tabular-nums">{{ service.replicas ? `${service.replicas.running}/${service.replicas.desired}` : "—/—" }}</span
-							><StatusDot :state="service.state" /><UIcon name="i-lucide-chevron-right" class="text-dimmed size-4"
-						/></span>
-					</button>
-				</div>
-			</DashboardCard>
-
-			<DashboardCard title="External Health" :section="data?.externalHealth" :loading="pending"
-				><div v-if="data?.externalHealth.ok" class="divide-default divide-y">
-					<div v-for="check in data.externalHealth.data" :key="check.id" class="flex items-center justify-between gap-4 py-2">
-						<div class="min-w-0">
-							<p class="text-highlighted truncate text-sm">{{ check.name }}</p>
-							<p class="text-dimmed truncate text-xs">{{ check.detail || check.source }}</p>
-						</div>
-						<StatusDot :state="check.state" />
-					</div></div
-			></DashboardCard>
-
-			<DashboardCard title="Deployments" :section="data?.deployments" :loading="pending">
-				<div v-if="data?.deployments.ok" class="divide-default divide-y">
-					<p v-if="!data.deployments.data.length" class="text-muted py-1 text-sm">No deployments configured.</p>
-					<div v-for="deployment in data.deployments.data" :key="deployment.name" class="py-2">
-						<div class="flex items-baseline justify-between gap-4">
-							<span class="text-muted shrink-0 text-sm">{{ deployment.name }}</span
-							><span v-if="deployment.image" class="min-w-0 truncate text-right font-mono text-xs" :title="deployment.image"
-								><span class="text-dimmed">{{ splitImage(deployment.image).repository }}:</span><span class="text-highlighted">{{ splitImage(deployment.image).tag }}</span></span
-							><span v-else class="text-dimmed text-sm">not deployed</span>
-						</div>
-						<p
-							v-if="deployment.digest || deployment.commitSha || deployment.deployedAt"
-							class="text-dimmed mt-1 truncate text-right font-mono text-xs"
-							:title="deployment.digest || deployment.commitSha || undefined"
-						>
-							{{ deployment.commitSha ? `commit ${shortId(deployment.commitSha)}` : deployment.digest ? `digest ${shortId(deployment.digest)}` : ""
-							}}<span v-if="deployment.deployedAt" class="font-sans"> · {{ formatMoment(deployment.deployedAt) }}</span>
+						<h1 class="readout text-crit text-[clamp(1.75rem,3.6vw,2.5rem)] leading-[1.06] font-semibold tracking-[-0.01em] text-pretty uppercase">Dashboard unreachable</h1>
+						<p class="text-ink-2 mt-3 text-sm text-pretty">
+							{{
+								error.statusCode === 403
+									? "This request did not arrive through Cloudflare Access, so the API refused it."
+									: "The dashboard API did not answer. The container may be restarting."
+							}}
+						</p>
+						<p v-if="data && staleSeconds !== null" class="readout text-ink-3 mt-1.5 text-xs">
+							Showing the last reading, taken {{ formatDurationShort(staleSeconds) }} ago at {{ formatClock(data.generatedAt) }}.
 						</p>
 					</div>
 				</div>
-			</DashboardCard>
+				<UButton color="neutral" variant="outline" label="Try again" icon="i-lucide-refresh-cw" :loading="pending" class="shrink-0 self-start sm:self-auto" @click="refresh()" />
+			</div>
+		</section>
 
-			<DashboardCard title="Backups" :section="data?.backup" :loading="pending"
-				><div v-if="data?.backup.ok" class="space-y-2">
-					<div class="flex items-center justify-between gap-4"><span class="text-muted text-sm">Latest PostgreSQL backup</span><StatusDot :state="data.backup.data.state" /></div>
-					<StatRow
-						label="Created"
-						:value="data.backup.data.latestAt ? formatMoment(data.backup.data.latestAt) : 'None found'"
-						:hint="data.backup.data.ageSeconds !== null ? formatAge(data.backup.data.ageSeconds) : null"
-					/><StatRow label="Filename" :value="data.backup.data.filename || 'Unavailable'" /><StatRow
-						label="Size"
-						:value="data.backup.data.sizeBytes !== null ? formatBytes(data.backup.data.sizeBytes) : 'Unavailable'"
-					/><StatRow label="Retention" :value="`${data.backup.data.retentionDays} days`" />
-					<div v-if="data.backup.data.lastFailure" class="border-error/30 bg-error/5 rounded-md border p-2 text-xs">
-						<p class="text-error font-medium">Last failure{{ data.backup.data.lastFailure.at ? ` · ${formatMoment(data.backup.data.lastFailure.at)}` : "" }}</p>
-						<p class="text-muted mt-1 break-words">{{ data.backup.data.lastFailure.detail }}</p>
-					</div>
-				</div></DashboardCard
-			>
+		<section v-else-if="!data" class="border-line border-b" aria-busy="true">
+			<div class="mx-auto flex max-w-[88rem] items-center gap-5 px-4 py-6 sm:px-6 sm:py-8">
+				<span class="bg-raised size-8 shrink-0 animate-pulse rounded-full" />
+				<div class="w-full space-y-3">
+					<div class="bg-raised h-8 w-72 max-w-full animate-pulse" />
+					<div class="bg-raised h-3.5 w-96 max-w-full animate-pulse" style="animation-delay: 120ms" />
+				</div>
+			</div>
+		</section>
 
-			<DashboardCard v-if="data?.shortcuts.length" title="Shortcuts" class="md:col-span-2"
-				><div class="flex flex-wrap gap-2">
-					<UButton
-						v-for="shortcut in data.shortcuts"
-						:key="shortcut.url"
-						:to="shortcut.url"
-						:label="shortcut.label"
-						target="_blank"
-						rel="noopener noreferrer"
-						color="neutral"
-						variant="outline"
-						size="sm"
-						trailing-icon="i-lucide-arrow-up-right"
-					/></div
-			></DashboardCard>
+		<VerdictBand v-else-if="verdict && data" :verdict="verdict" :server="data.server" />
 
-			<DashboardCard v-if="data?.activity.length" title="Recent Activity" class="md:col-span-2">
-				<ol class="divide-default divide-y">
-					<li v-for="item in data.activity" :key="item.id" class="grid grid-cols-[3rem_0.75rem_minmax(0,1fr)] items-start gap-3 py-2 first:pt-0 last:pb-0">
-						<time :datetime="item.at" class="text-dimmed font-mono text-xs tabular-nums">{{ formatClock(item.at) }}</time>
-						<span
-							class="mt-1 size-2 rounded-full"
-							:class="item.state === 'online' ? 'bg-success' : item.state === 'offline' ? 'bg-error' : item.state === 'degraded' ? 'bg-warning' : 'bg-neutral-400'"
-						/>
-						<div class="min-w-0">
-							<p class="text-highlighted text-sm">{{ item.title }}</p>
-							<p v-if="item.detail" class="text-dimmed truncate text-xs" :title="item.detail">{{ item.detail }}</p>
-						</div>
-					</li>
-				</ol>
-			</DashboardCard>
-		</div>
+		<main class="mx-auto max-w-[88rem] space-y-4 px-4 pt-4 sm:px-6 sm:pt-6">
+			<AttentionList v-if="data?.attention.length" :items="data.attention" @inspect="inspectByName" />
 
-		<ServiceDetailsSlideover :service="selectedService" @close="selectedService = null" />
-	</UContainer>
+			<section v-if="data" class="panel">
+				<LedgerStrip :cells="ledger" />
+				<div v-if="data.server.ok" class="divide-line border-line grid border-t sm:grid-cols-3 sm:divide-x">
+					<HostMeter
+						label="CPU"
+						:value="data.server.data.cpu.usagePercent"
+						:primary="`${data.server.data.cpu.usagePercent}%`"
+						:secondary="`load ${data.server.data.cpu.load.map((entry) => entry.toFixed(2)).join(' / ')} · ${data.server.data.cpu.cores} cores`"
+						:warning="data.thresholds.cpuWarningPercent"
+						:critical="data.thresholds.cpuCriticalPercent"
+						:history="history.map((sample) => sample.cpu)"
+					/>
+					<HostMeter
+						label="Memory"
+						:value="data.server.data.memory.usagePercent"
+						:primary="`${data.server.data.memory.usagePercent}%`"
+						:secondary="formatBytesPair(data.server.data.memory.usedBytes, data.server.data.memory.totalBytes)"
+						:warning="data.thresholds.ramWarningPercent"
+						:critical="data.thresholds.ramCriticalPercent"
+						:history="history.map((sample) => sample.memory)"
+					/>
+					<HostMeter
+						label="Disk"
+						:value="data.server.data.disk.usagePercent"
+						:primary="`${data.server.data.disk.usagePercent}%`"
+						:secondary="`${formatBytesPair(data.server.data.disk.usedBytes, data.server.data.disk.totalBytes)} · ${formatBytes(data.server.data.disk.totalBytes - data.server.data.disk.usedBytes)} free`"
+						:warning="data.thresholds.diskWarningPercent"
+						:critical="data.thresholds.diskCriticalPercent"
+						:history="history.map((sample) => sample.disk)"
+					/>
+				</div>
+				<div v-else class="border-line border-t px-4 py-4">
+					<p class="text-warn label">Host metrics unavailable</p>
+					<p class="text-ink-2 mt-2 text-sm">{{ data.server.error }}</p>
+					<p v-if="hintFor(data.server.error)" class="text-ink-3 mt-1 text-xs">{{ hintFor(data.server.error) }}</p>
+				</div>
+			</section>
+
+			<div v-if="data" class="grid items-start gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+				<div class="min-w-0 space-y-4">
+					<ServicesPanel :section="data?.swarmServices" :loading="pending" @inspect="inspected = $event" />
+					<DeploymentsPanel :section="data?.deployments" :loading="pending" />
+				</div>
+
+				<div class="min-w-0 space-y-4 lg:sticky lg:top-16">
+					<BackupPanel :section="data?.backup" :loading="pending" />
+					<ChecksPanel :section="data?.externalHealth" :loading="pending" />
+					<ToolsPanel v-if="data?.shortcuts.length" :shortcuts="data.shortcuts" />
+				</div>
+			</div>
+
+			<ActivityPanel v-if="data?.activity.length" :events="data.activity" />
+
+			<p class="text-ink-3 pt-2 text-xs">
+				Read-only. Press <kbd class="readout border-line text-ink-2 border px-1">R</kbd> to refresh, <kbd class="readout border-line text-ink-2 border px-1">L</kbd> for live polling. Session
+				history is held in this tab only.
+			</p>
+		</main>
+
+		<ServiceDetailsSlideover :service="inspected" @close="inspected = null" />
+	</div>
 </template>

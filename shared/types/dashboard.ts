@@ -68,6 +68,7 @@ export interface BackupStatus {
 	filename: string | null;
 	sizeBytes: number | null;
 	retentionDays: number;
+	maxAgeHours: number;
 	lastFailure: { at: string | null; detail: string; filename: string | null } | null;
 	state: HealthState;
 	detail: string;
@@ -96,6 +97,15 @@ export interface AttentionItem {
 	detail: string;
 }
 
+export interface Thresholds {
+	cpuWarningPercent: number;
+	cpuCriticalPercent: number;
+	ramWarningPercent: number;
+	ramCriticalPercent: number;
+	diskWarningPercent: number;
+	diskCriticalPercent: number;
+}
+
 export interface DashboardPayload {
 	generatedAt: string;
 	server: Section<ServerStats>;
@@ -106,4 +116,5 @@ export interface DashboardPayload {
 	activity: ActivityEvent[];
 	attention: AttentionItem[];
 	shortcuts: Shortcut[];
+	thresholds: Thresholds;
 }
