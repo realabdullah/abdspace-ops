@@ -1,4 +1,4 @@
-import type { Deployment, HealthState, ServiceStatus } from "#shared/types/dashboard";
+import type { ActivityEvent, Deployment, HealthState, ServiceStatus } from "#shared/types/dashboard";
 import type { NamedTarget } from "./dashboard-config";
 
 interface SwarmService {
@@ -133,6 +133,29 @@ export function toSwarmDeployments(snapshot: SwarmSnapshot, targets: NamedTarget
 			commitSha: labels["org.opencontainers.image.revision"] ?? labels["com.docker.compose.project.config_files.sha256"] ?? parsed.commitSha,
 		};
 	});
+}
+
+export function toSwarmActivity(snapshot: SwarmSnapshot, serviceTargets: NamedTarget[], deploymentTargets: NamedTarget[]): ActivityEvent[] {
+	const taskEvents = serviceTargets.flatMap((target) => {
+		const service = findService(snapshot, target.match);
+		if (!service) return [];
+		return tasksFor(snapshot, service).flatMap((task): ActivityEvent[] => {
+			const at = task.Status.Timestamp ?? task.UpdatedAt ?? task.CreatedAt;
+			if (!at || Number.isNaN(Date.parse(at))) return [];
+			const state = task.Status.State;
+			if (!["running", "failed", "rejected", "shutdown"].includes(state)) return [];
+			const health: HealthState = state === "running" ? "online" : state === "shutdown" ? "unknown" : "offline";
+			const action = state === "running" ? "task started" : state === "shutdown" ? "task stopped" : `task ${state}`;
+			return [{ id: `task-${task.ID}-${state}`, at, kind: "service", title: `${target.label} ${action}`, detail: task.Status.Err || task.Status.Message || null, state: health }];
+		});
+	});
+	const deploymentEvents = deploymentTargets.flatMap((target): ActivityEvent[] => {
+		const service = findService(snapshot, target.match);
+		const at = service?.UpdatedAt ?? service?.CreatedAt;
+		if (!service || !at || Number.isNaN(Date.parse(at))) return [];
+		return [{ id: `deployment-${service.ID}-${at}`, at, kind: "deployment", title: `${target.label} deployed`, detail: service.Spec.TaskTemplate?.ContainerSpec?.Image ?? null, state: "online" }];
+	});
+	return [...taskEvents, ...deploymentEvents];
 }
 
 function deploymentImage(value: string | null): Pick<Deployment, "image" | "digest" | "immutableTag" | "commitSha"> {

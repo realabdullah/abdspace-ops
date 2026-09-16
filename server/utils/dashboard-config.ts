@@ -33,6 +33,8 @@ function accessIssuer(raw: string | undefined): string {
 
 export function dashboardConfig() {
 	const env = process.env;
+	const ramWarningPercent = percent(env.RAM_WARNING_PERCENT, 80);
+	const diskWarningPercent = percent(env.DISK_WARNING_PERCENT, 75);
 	return {
 		diskPath: env.DASHBOARD_DISK_PATH || "/",
 		docker: {
@@ -49,8 +51,14 @@ export function dashboardConfig() {
 			logPath: env.BACKUP_LOG_PATH || "",
 			markerPath: env.BACKUP_MARKER_PATH || "",
 			successPattern: env.BACKUP_LOG_SUCCESS_PATTERN || "completed|success",
-			maxAgeHours: Number(env.BACKUP_MAX_AGE_HOURS || 26),
-			retentionDays: Number(env.BACKUP_RETENTION_DAYS || 14),
+			maxAgeHours: positiveNumber(env.BACKUP_WARNING_HOURS || env.BACKUP_MAX_AGE_HOURS, 26),
+			retentionDays: positiveNumber(env.BACKUP_RETENTION_DAYS, 14),
+		},
+		thresholds: {
+			ramWarningPercent,
+			ramCriticalPercent: Math.max(ramWarningPercent, percent(env.RAM_CRITICAL_PERCENT, 90)),
+			diskWarningPercent,
+			diskCriticalPercent: Math.max(diskWarningPercent, percent(env.DISK_CRITICAL_PERCENT, 90)),
 		},
 		shortcuts: parseLinks(env.DASHBOARD_LINKS),
 		cfAccess: {
@@ -59,6 +67,15 @@ export function dashboardConfig() {
 		},
 		requireCfAccess: env.DASHBOARD_REQUIRE_CF_ACCESS === "true",
 	};
+}
+
+function positiveNumber(raw: string | undefined, fallback: number): number {
+	const value = Number(raw);
+	return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function percent(raw: string | undefined, fallback: number): number {
+	return Math.min(100, positiveNumber(raw, fallback));
 }
 
 export type DashboardConfig = ReturnType<typeof dashboardConfig>;

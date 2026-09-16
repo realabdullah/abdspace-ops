@@ -1,4 +1,4 @@
-import type { Deployment, HealthState, ServiceStatus } from "#shared/types/dashboard";
+import type { ActivityEvent, Deployment, HealthState, ServiceStatus } from "#shared/types/dashboard";
 import type { DashboardConfig, NamedTarget } from "./dashboard-config";
 
 interface DockerContainer {
@@ -103,12 +103,13 @@ export function toDeployments(containers: DockerContainer[], targets: NamedTarge
 	});
 }
 
-export async function readDockerSnapshot(config: DashboardConfig["docker"]): Promise<{ services: ServiceStatus[]; deployments: Deployment[] }> {
+export async function readDockerSnapshot(config: DashboardConfig["docker"]): Promise<{ services: ServiceStatus[]; deployments: Deployment[]; activity: ActivityEvent[] }> {
 	if (config.mode === "swarm") {
 		const snapshot = await listSwarm(config.apiUrl);
 		return {
 			services: config.services.length ? toSwarmServices(snapshot, config.services) : [],
 			deployments: toSwarmDeployments(snapshot, config.deployments),
+			activity: toSwarmActivity(snapshot, config.services, config.deployments),
 		};
 	}
 
@@ -116,5 +117,6 @@ export async function readDockerSnapshot(config: DashboardConfig["docker"]): Pro
 	return {
 		services: config.services.length ? toServices(containers, config.services) : [],
 		deployments: toDeployments(containers, config.deployments),
+		activity: [],
 	};
 }

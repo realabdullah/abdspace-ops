@@ -1,5 +1,5 @@
 import { open, stat } from "node:fs/promises";
-import type { BackupStatus } from "#shared/types/dashboard";
+import type { ActivityEvent, BackupStatus } from "#shared/types/dashboard";
 import type { DashboardConfig } from "./dashboard-config";
 
 const TAIL_BYTES = 64 * 1024;
@@ -71,6 +71,33 @@ export function parseBackupLog(content: string, successPattern: string): ParsedB
 		if (latestSuccess && lastFailure) break;
 	}
 	return { latestSuccess, lastFailure };
+}
+
+export function backupActivityFromLog(content: string, successPattern: string): ActivityEvent[] {
+	const success = new RegExp(successPattern, "i");
+	const failure = /failed|failure|error/i;
+	return content.split("\n").flatMap((line, index): ActivityEvent[] => {
+		const isSuccess = success.test(line);
+		const isFailure = failure.test(line);
+		if (!isSuccess && !isFailure) return [];
+		const entry = entryFrom(line);
+		if (!entry.at) return [];
+		return [
+			{
+				id: `backup-${entry.at.toISOString()}-${index}`,
+				at: entry.at.toISOString(),
+				kind: "backup",
+				title: isFailure ? "PostgreSQL backup failed" : "PostgreSQL backup completed",
+				detail: entry.filename ?? entry.detail,
+				state: isFailure ? "offline" : "online",
+			},
+		];
+	});
+}
+
+export async function readBackupActivity(config: DashboardConfig["backup"]): Promise<ActivityEvent[]> {
+	if (!config.logPath) return [];
+	return backupActivityFromLog(await tail(config.logPath), config.successPattern);
 }
 
 function entryFrom(line: string): BackupLogEntry {

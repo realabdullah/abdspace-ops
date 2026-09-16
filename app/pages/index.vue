@@ -10,6 +10,8 @@ const onlineCount = (items: Array<{ state: HealthState }>) => items.filter((item
 const healthSummary = computed(() => {
 	if (!data.value) return null;
 	const { server, swarmServices, externalHealth, backup } = data.value;
+	if (data.value.attention.some(({ severity }) => severity === "critical")) return { label: "Systems need attention", state: "offline" as HealthState };
+	if (data.value.attention.length) return { label: "Some systems need attention", state: "degraded" as HealthState };
 	const sections = [server, swarmServices, externalHealth, backup];
 	if (sections.some((section) => !section.ok)) return { label: "Some status unavailable", state: "unknown" as HealthState };
 	if (!swarmServices.ok || !externalHealth.ok || !backup.ok) return { label: "Some status unavailable", state: "unknown" as HealthState };
@@ -67,6 +69,22 @@ useHead({ title: "Server" });
 				<p class="text-muted text-sm">
 					Disk <span class="text-highlighted font-semibold tabular-nums">{{ data.server.ok ? `${data.server.data.disk.usagePercent}%` : "—" }}</span>
 				</p>
+			</div>
+		</section>
+
+		<section v-if="data?.attention.length" class="border-warning/40 bg-warning/5 mb-4 rounded-lg border p-4">
+			<div class="mb-3 flex items-center gap-2">
+				<UIcon name="i-lucide-triangle-alert" class="text-warning size-4" />
+				<h2 class="text-highlighted text-sm font-semibold">Attention</h2>
+			</div>
+			<div class="divide-default divide-y">
+				<div v-for="item in data.attention" :key="item.id" class="flex gap-3 py-2 first:pt-0 last:pb-0">
+					<span class="mt-1 size-2 shrink-0 rounded-full" :class="item.severity === 'critical' ? 'bg-error' : 'bg-warning'" />
+					<div class="min-w-0">
+						<p class="text-highlighted text-sm font-medium">{{ item.title }}</p>
+						<p class="text-muted text-xs">{{ item.detail }}</p>
+					</div>
+				</div>
 			</div>
 		</section>
 
@@ -168,6 +186,22 @@ useHead({ title: "Server" });
 						trailing-icon="i-lucide-arrow-up-right"
 					/></div
 			></DashboardCard>
+
+			<DashboardCard v-if="data?.activity.length" title="Recent Activity" class="md:col-span-2">
+				<ol class="divide-default divide-y">
+					<li v-for="item in data.activity" :key="item.id" class="grid grid-cols-[3rem_0.75rem_minmax(0,1fr)] items-start gap-3 py-2 first:pt-0 last:pb-0">
+						<time :datetime="item.at" class="text-dimmed font-mono text-xs tabular-nums">{{ formatClock(item.at) }}</time>
+						<span
+							class="mt-1 size-2 rounded-full"
+							:class="item.state === 'online' ? 'bg-success' : item.state === 'offline' ? 'bg-error' : item.state === 'degraded' ? 'bg-warning' : 'bg-neutral-400'"
+						/>
+						<div class="min-w-0">
+							<p class="text-highlighted text-sm">{{ item.title }}</p>
+							<p v-if="item.detail" class="text-dimmed truncate text-xs" :title="item.detail">{{ item.detail }}</p>
+						</div>
+					</li>
+				</ol>
+			</DashboardCard>
 		</div>
 
 		<ServiceDetailsSlideover :service="selectedService" @close="selectedService = null" />

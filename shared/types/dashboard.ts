@@ -78,6 +78,24 @@ export interface Shortcut {
 	url: string;
 }
 
+export type ActivityKind = "service" | "deployment" | "backup" | "external";
+
+export interface ActivityEvent {
+	id: string;
+	at: string;
+	kind: ActivityKind;
+	title: string;
+	detail: string | null;
+	state: HealthState;
+}
+
+export interface AttentionItem {
+	id: string;
+	severity: "warning" | "critical";
+	title: string;
+	detail: string;
+}
+
 export interface DashboardPayload {
 	generatedAt: string;
 	server: Section<ServerStats>;
@@ -85,5 +103,7 @@ export interface DashboardPayload {
 	externalHealth: Section<ExternalCheck[]>;
 	deployments: Section<Deployment[]>;
 	backup: Section<BackupStatus>;
+	activity: ActivityEvent[];
+	attention: AttentionItem[];
 	shortcuts: Shortcut[];
 }

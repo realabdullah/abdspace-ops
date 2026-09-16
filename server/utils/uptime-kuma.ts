@@ -1,4 +1,4 @@
-import type { ExternalCheck, HealthState } from "#shared/types/dashboard";
+import type { ActivityEvent, ExternalCheck, HealthState } from "#shared/types/dashboard";
 
 interface KumaStatusPage {
 	publicGroupList?: Array<{ monitorList?: Array<{ id: number; name: string }> }>;
@@ -15,8 +15,8 @@ function stateFor(status: number | undefined): HealthState {
 	return "unknown";
 }
 
-export async function readKumaChecks(baseURL: string, slug: string): Promise<ExternalCheck[]> {
-	if (!baseURL || !slug) return [];
+export async function readKumaSnapshot(baseURL: string, slug: string): Promise<{ checks: ExternalCheck[]; activity: ActivityEvent[] }> {
+	if (!baseURL || !slug) return { checks: [], activity: [] };
 
 	const [page, beats] = await Promise.all([
 		$fetch<KumaStatusPage>(`/api/status-page/${encodeURIComponent(slug)}`, { baseURL, timeout: 4000, retry: 0 }),
@@ -25,7 +25,7 @@ export async function readKumaChecks(baseURL: string, slug: string): Promise<Ext
 
 	const monitors = (page.publicGroupList ?? []).flatMap((group) => group.monitorList ?? []);
 
-	return monitors.map((monitor) => {
+	const checks = monitors.map((monitor) => {
 		const latest = beats.heartbeatList?.[String(monitor.id)]?.at(-1);
 		return {
 			id: `kuma-${monitor.id}`,
@@ -36,4 +36,19 @@ export async function readKumaChecks(baseURL: string, slug: string): Promise<Ext
 			checkedAt: latest?.time ?? null,
 		};
 	});
+	const activity = monitors.flatMap((monitor) => {
+		const heartbeats = beats.heartbeatList?.[String(monitor.id)] ?? [];
+		return heartbeats.flatMap((heartbeat, index): ActivityEvent[] => {
+			const previous = heartbeats[index - 1];
+			if (!previous || previous.status === heartbeat.status || Number.isNaN(Date.parse(heartbeat.time))) return [];
+			const state = stateFor(heartbeat.status);
+			const action = state === "online" ? "recovered" : state === "offline" ? "went offline" : "became degraded";
+			return [{ id: `kuma-${monitor.id}-${heartbeat.time}-${heartbeat.status}`, at: heartbeat.time, kind: "external", title: `${monitor.name} ${action}`, detail: heartbeat.msg || null, state }];
+		});
+	});
+	return { checks, activity };
+}
+
+export async function readKumaChecks(baseURL: string, slug: string): Promise<ExternalCheck[]> {
+	return (await readKumaSnapshot(baseURL, slug)).checks;
 }

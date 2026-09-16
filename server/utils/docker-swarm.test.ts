@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toSwarmServices, type SwarmSnapshot } from "./docker-swarm.ts";
+import { toSwarmActivity, toSwarmServices, type SwarmSnapshot } from "./docker-swarm.ts";
 
 test("reports desired and running replicas with task detail", () => {
 	const snapshot: SwarmSnapshot = {
@@ -23,6 +23,9 @@ test("reports desired and running replicas with task detail", () => {
 	assert.equal(service?.state, "degraded");
 	assert.deepEqual(service?.replicas, { running: 1, desired: 2 });
 	assert.equal(service?.failureReason, "image pull failed");
+	const activity = toSwarmActivity(snapshot, [{ label: "Web", match: "example-web" }], []);
+	assert.equal(activity[0]?.title, "Web task failed");
+	assert.equal(activity[1]?.title, "Web task started");
 });
 
 test("represents a missing configured service as unknown", () => {
