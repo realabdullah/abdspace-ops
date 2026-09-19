@@ -26,14 +26,14 @@ Copy `.env.example` and set the deployment-specific values.
 `Label=service-name` entries:
 
 ```env
-DASHBOARD_SERVICES=Web=taskgid-frontend-web,API=abdspace-taskgidapi,Database=taskgid-db
-DASHBOARD_DEPLOYMENTS=Web=taskgid-frontend-web,API=abdspace-taskgidapi
+DASHBOARD_SERVICES=Web=example-web,API=example-api,Database=example-db
+DASHBOARD_DEPLOYMENTS=Web=example-web,API=example-api
 ```
 
 `DASHBOARD_LINKS` uses comma-separated `Label=https://...` entries:
 
 ```env
-DASHBOARD_LINKS=Dokploy=https://server.abdspace.xyz,Uptime Kuma=https://status.abdspace.xyz,Veyrd=https://status.veyrd.com
+DASHBOARD_LINKS=Dokploy=https://dokploy.example.com,Uptime Kuma=https://status.example.com,App Status=https://app-status.example.com
 ```
 
 Optional `DASHBOARD_SERVICE_LINKS` uses the same format. Labels must match
@@ -51,10 +51,10 @@ change between deployments.
 
 GitHub Actions builds the existing production `Dockerfile` on pushes to `main`
 and on manual dispatch. It publishes both `latest` and the full commit SHA to
-GHCR. Set this value in Dokploy, replacing `<owner>` with the GitHub owner:
+GHCR. Set this value in Dokploy, replacing `example-owner` with the GitHub owner:
 
 ```env
-OPS_IMAGE=ghcr.io/<owner>/abdspace-ops:latest
+OPS_IMAGE=ghcr.io/example-owner/abdspace-ops:latest
 ```
 
 Deploy `docker-compose.yml` as a Dokploy Compose application. Dokploy pulls the
