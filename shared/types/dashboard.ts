@@ -38,7 +38,7 @@ export interface ServiceStatus {
 	image: string | null;
 	taskState: string | null;
 	taskId: string | null;
-	lastRestartAt: string | null;
+	taskStatusAt: string | null;
 	createdAt: string | null;
 	updatedAt: string | null;
 	failureReason: string | null;
@@ -117,4 +117,26 @@ export interface DashboardPayload {
 	attention: AttentionItem[];
 	shortcuts: Shortcut[];
 	thresholds: Thresholds;
+}
+
+export interface HistoryPoint {
+	at: string;
+	value: number;
+}
+
+export interface AvailabilitySummary {
+	name: string;
+	availablePercent: number;
+	samples: number;
+}
+
+export interface HistoryPayload {
+	available: boolean;
+	error: string | null;
+	cpu: HistoryPoint[];
+	memory: HistoryPoint[];
+	disk: HistoryPoint[];
+	availability: AvailabilitySummary[];
+	deployments: ActivityEvent[];
+	backups: ActivityEvent[];
 }

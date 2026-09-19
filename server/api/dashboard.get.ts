@@ -59,6 +59,7 @@ function recentActivity(...sources: ActivityEvent[][]): ActivityEvent[] {
 function buildAttention(sections: Pick<DashboardPayload, "server" | "swarmServices" | "externalHealth" | "backup">, thresholds: ReturnType<typeof dashboardConfig>["thresholds"]): AttentionItem[] {
 	const items: AttentionItem[] = [];
 	if (sections.server.ok) {
+		addResourceAttention(items, "cpu", "CPU", sections.server.data.cpu.usagePercent, thresholds.cpuWarningPercent, thresholds.cpuCriticalPercent);
 		addResourceAttention(items, "ram", "RAM", sections.server.data.memory.usagePercent, thresholds.ramWarningPercent, thresholds.ramCriticalPercent);
 		addResourceAttention(items, "disk", "Disk", sections.server.data.disk.usagePercent, thresholds.diskWarningPercent, thresholds.diskCriticalPercent);
 	} else {

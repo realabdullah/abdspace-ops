@@ -37,6 +37,7 @@ export function dashboardConfig() {
 	const ramWarningPercent = percent(env.RAM_WARNING_PERCENT, 80);
 	const diskWarningPercent = percent(env.DISK_WARNING_PERCENT, 75);
 	return {
+		historyPath: env.DASHBOARD_HISTORY_PATH || "",
 		diskPath: env.DASHBOARD_DISK_PATH || "/",
 		docker: {
 			apiUrl: (env.DOCKER_API_URL || "").replace(/\/+$/, ""),

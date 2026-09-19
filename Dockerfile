@@ -20,6 +20,8 @@ ENV PORT=3000
 
 COPY --from=build /app/.output ./.output
 
+RUN mkdir -p /data && chown node:node /data
+
 USER node
 
 EXPOSE 3000

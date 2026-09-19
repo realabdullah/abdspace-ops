@@ -6,6 +6,7 @@ services:
             DOCKER_API_URL: http://docker-socket-proxy:2375
             DASHBOARD_DOCKER_MODE: ${DASHBOARD_DOCKER_MODE:-swarm}
             DASHBOARD_DISK_PATH: /host-disk
+            DASHBOARD_HISTORY_PATH: /data/history.sqlite
             TZ: ${TZ:-UTC}
             DASHBOARD_SERVICES: ${DASHBOARD_SERVICES}
             DASHBOARD_DEPLOYMENTS: ${DASHBOARD_DEPLOYMENTS}
@@ -27,6 +28,7 @@ services:
         volumes:
             - /srv/ops-disk-probe:/host-disk:ro
             - ${BACKUP_LOG_HOST_PATH}:/backups/backup.log:ro
+            - ops-history:/data
         expose:
             - "3000"
         networks:
@@ -70,3 +72,6 @@ networks:
         driver: bridge
     dokploy-network:
         external: true
+
+volumes:
+    ops-history:

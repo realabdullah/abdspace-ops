@@ -35,7 +35,7 @@ const groups = computed(() => {
 </script>
 
 <template>
-	<OpsPanel title="Recent activity">
+	<OpsPanel title="Recent observed activity">
 		<template #aside>
 			<span class="readout text-ink-3 text-xs">{{ events.length }} events</span>
 		</template>

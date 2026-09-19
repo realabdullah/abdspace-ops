@@ -82,6 +82,18 @@ The only host mounts are:
 - `/srv/ops-disk-probe:/host-disk:ro`
 - `/var/log/taskgid-backup.log:/backups/backup.log:ro`
 
+The dashboard also writes its own SQLite history to the private `ops-history`
+Docker volume at `/data/history.sqlite`. This is not a host filesystem mount or
+another service. It stores one-minute host and availability readings plus
+observed deployment and backup events, and removes records after 32 days. The
+volume persists across normal redeploys; removing the Compose volume deletes
+the history. It is not covered by the PostgreSQL backup job.
+
+`DASHBOARD_HISTORY_PATH` is optional for local development. When unset or when
+the volume cannot be written, current status still works and the History panel
+reports that storage is unavailable. The runtime uses Node 22's built-in SQLite
+API, which is still marked experimental by Node.
+
 `DASHBOARD_REQUIRE_CF_ACCESS` defaults to `false`. Its header check is not an
 authentication boundary while the origin remains directly reachable.
 

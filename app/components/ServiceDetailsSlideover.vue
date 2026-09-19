@@ -18,7 +18,7 @@ const open = computed({ get: () => props.service !== null, set: (value) => !valu
 				<dl class="divide-line divide-y">
 					<StatRow label="Replicas" :value="service.replicas ? `${service.replicas.running} running of ${service.replicas.desired} desired` : 'unavailable'" />
 					<StatRow label="Task state" :value="service.taskState || 'unavailable'" />
-					<StatRow label="Last restart" :value="service.lastRestartAt ? formatMoment(service.lastRestartAt) : 'no restart observed'" />
+					<StatRow label="Task status at" :value="service.taskStatusAt ? formatMoment(service.taskStatusAt) : 'unavailable'" />
 					<StatRow label="Created" :value="service.createdAt ? formatMoment(service.createdAt) : 'unavailable'" />
 					<StatRow label="Updated" :value="service.updatedAt ? formatMoment(service.updatedAt) : 'unavailable'" />
 				</dl>

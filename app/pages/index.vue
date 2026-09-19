@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import type { ServiceStatus } from "#shared/types/dashboard";
+import type { HistoryPayload, ServiceStatus } from "#shared/types/dashboard";
 import type { LedgerCell } from "~/components/LedgerStrip.vue";
 
 const { data, error, pending, refresh, history, live, verdict, staleSeconds } = useOpsDashboard();
+const { data: storedHistory, refresh: refreshStoredHistory } = useFetch<HistoryPayload>("/api/history", { lazy: true, server: false, immediate: false, cache: "no-store" });
+watch(
+	() => data.value?.generatedAt,
+	(at) => {
+		if (at) void refreshStoredHistory();
+	}
+);
 useStatusSignal(
 	verdict,
 	computed(() => Boolean(error.value))
@@ -162,10 +169,11 @@ const ledger = computed<LedgerCell[]>(() => {
 			</div>
 
 			<ActivityPanel v-if="data?.activity.length" :events="data.activity" />
+			<HistoryPanel v-if="data" :history="storedHistory ?? null" />
 
 			<p class="text-ink-3 pt-2 text-xs">
-				Read-only. Press <kbd class="readout border-line text-ink-2 border px-1">R</kbd> to refresh, <kbd class="readout border-line text-ink-2 border px-1">L</kbd> for live polling. Session
-				history is held in this tab only.
+				Read-only operations. Press <kbd class="readout border-line text-ink-2 border px-1">R</kbd> to refresh, <kbd class="readout border-line text-ink-2 border px-1">L</kbd> for live
+				polling. History is stored on this VPS.
 			</p>
 		</main>
 
