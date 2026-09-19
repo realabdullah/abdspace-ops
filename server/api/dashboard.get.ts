@@ -10,7 +10,7 @@ export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 
 	const [server, swarmServices, externalHealth, deployments, backup] = await Promise.all([
 		section(() => readServerStats(config.diskPath)),
-		section(async () => (await docker).services),
+		section(async () => (await docker).services.map((service) => ({ ...service, dokployUrl: config.serviceLinks.find((link) => link.label === service.name)?.url ?? null }))),
 		section(async (): Promise<ExternalCheck[]> => {
 			const self = dashboardSelfCheck();
 			if (!config.kuma.baseUrl || !config.kuma.statusSlug) return [self];
@@ -45,6 +45,7 @@ export default defineEventHandler(async (event): Promise<DashboardPayload> => {
 		attention,
 		shortcuts: config.shortcuts,
 		thresholds: config.thresholds,
+		sensitiveDiagnosticsEnabled: config.sensitiveDiagnosticsEnabled,
 	};
 });
 

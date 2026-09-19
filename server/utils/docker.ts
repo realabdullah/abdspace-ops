@@ -71,6 +71,8 @@ export function toServices(containers: DockerContainer[], targets: NamedTarget[]
 				createdAt: null,
 				updatedAt: null,
 				failureReason: null,
+				failureTaskId: null,
+				dokployUrl: null,
 			};
 		return {
 			id: container.Id,
@@ -85,6 +87,8 @@ export function toServices(containers: DockerContainer[], targets: NamedTarget[]
 			createdAt: container.Created ? new Date(container.Created * 1000).toISOString() : null,
 			updatedAt: null,
 			failureReason: container.State === "running" ? null : container.Status,
+			failureTaskId: null,
+			dokployUrl: null,
 		};
 	});
 }

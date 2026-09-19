@@ -169,6 +169,7 @@ const ledger = computed<LedgerCell[]>(() => {
 			</div>
 
 			<ActivityPanel v-if="data?.activity.length" :events="data.activity" />
+			<RecoveryPanel v-if="data" :backup="data.backup" :diagnostics-enabled="data.sensitiveDiagnosticsEnabled" />
 			<HistoryPanel v-if="data" :history="storedHistory ?? null" />
 
 			<p class="text-ink-3 pt-2 text-xs">
@@ -177,6 +178,6 @@ const ledger = computed<LedgerCell[]>(() => {
 			</p>
 		</main>
 
-		<ServiceDetailsSlideover :service="inspected" @close="inspected = null" />
+		<ServiceDetailsSlideover :service="inspected" :diagnostics-enabled="data?.sensitiveDiagnosticsEnabled ?? false" @close="inspected = null" />
 	</div>
 </template>

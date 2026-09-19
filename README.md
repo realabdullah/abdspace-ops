@@ -36,6 +36,14 @@ DASHBOARD_DEPLOYMENTS=Web=taskgid-frontend-web,API=abdspace-taskgidapi
 DASHBOARD_LINKS=Dokploy=https://server.abdspace.xyz,Uptime Kuma=https://status.abdspace.xyz,Veyrd=https://status.veyrd.com
 ```
 
+Optional `DASHBOARD_SERVICE_LINKS` uses the same format. Labels must match
+`DASHBOARD_SERVICES` labels, and URLs should be copied from the corresponding
+Dokploy service pages:
+
+```env
+DASHBOARD_SERVICE_LINKS=Web=https://dokploy.example.com/services/web,API=https://dokploy.example.com/services/api
+```
+
 Service names may use their stable prefix so Dokploy's generated suffix can
 change between deployments.
 
@@ -100,3 +108,11 @@ authentication boundary while the origin remains directly reachable.
 JWT validation is enabled when both `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`
 are set. Restrict origin access separately if requests must only arrive through
 Cloudflare.
+
+Recent service logs and diagnostic snapshots are disabled by default. To enable
+them, set `DASHBOARD_ENABLE_SENSITIVE_DIAGNOSTICS=true` along with both
+`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`. The app verifies the Access JWT on
+every request; the header-only `DASHBOARD_REQUIRE_CF_ACCESS` mode does not unlock
+these endpoints. Logs may contain secrets, so only trusted operators should
+have Access to this application. The app fetches at most 100 recent service-log
+lines and limits the response to 256 KiB. No Docker write methods are enabled.

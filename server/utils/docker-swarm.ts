@@ -97,6 +97,8 @@ export function toSwarmServices(snapshot: SwarmSnapshot, targets: NamedTarget[])
 				createdAt: null,
 				updatedAt: null,
 				failureReason: null,
+				failureTaskId: null,
+				dokployUrl: null,
 			};
 		}
 		const tasks = tasksFor(snapshot, service);
@@ -114,6 +116,8 @@ export function toSwarmServices(snapshot: SwarmSnapshot, targets: NamedTarget[])
 			createdAt: service.CreatedAt ?? null,
 			updatedAt: service.UpdatedAt ?? null,
 			failureReason: recentFailure?.Status.Err || recentFailure?.Status.Message || null,
+			failureTaskId: recentFailure?.ID ?? null,
+			dokployUrl: null,
 		};
 	});
 }

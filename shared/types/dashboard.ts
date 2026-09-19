@@ -42,6 +42,8 @@ export interface ServiceStatus {
 	createdAt: string | null;
 	updatedAt: string | null;
 	failureReason: string | null;
+	failureTaskId: string | null;
+	dokployUrl: string | null;
 }
 
 export interface ExternalCheck {
@@ -117,6 +119,13 @@ export interface DashboardPayload {
 	attention: AttentionItem[];
 	shortcuts: Shortcut[];
 	thresholds: Thresholds;
+	sensitiveDiagnosticsEnabled: boolean;
+}
+
+export interface ServiceLogs {
+	service: string;
+	lines: string;
+	truncated: boolean;
 }
 
 export interface HistoryPoint {

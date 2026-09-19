@@ -65,6 +65,8 @@ export function dashboardConfig() {
 			diskCriticalPercent: Math.max(diskWarningPercent, percent(env.DISK_CRITICAL_PERCENT, 90)),
 		},
 		shortcuts: parseLinks(env.DASHBOARD_LINKS),
+		serviceLinks: parseLinks(env.DASHBOARD_SERVICE_LINKS),
+		sensitiveDiagnosticsEnabled: env.DASHBOARD_ENABLE_SENSITIVE_DIAGNOSTICS === "true" && Boolean(accessIssuer(env.CF_ACCESS_TEAM_DOMAIN) && env.CF_ACCESS_AUD),
 		cfAccess: {
 			issuer: accessIssuer(env.CF_ACCESS_TEAM_DOMAIN),
 			audience: env.CF_ACCESS_AUD || "",
